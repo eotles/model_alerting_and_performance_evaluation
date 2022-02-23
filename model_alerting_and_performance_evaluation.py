@@ -3,14 +3,22 @@ import numpy as np
 import pandas as pd
 from sklearn import metrics
 
-def compute_alerts_and_performance(df, taus=np.linspace(0,1,25)):
+
+plt.rcParams["figure.figsize"] = (15,15)
+
+def compute_alerts_and_performance(df, taus=np.linspace(0,1,25), return_oc_res=False):
     #calculate sensitivity at the population level
     #calculate alerts at the observer level
-    
+
+    observers = df['observer'].unique()
+
     res = []
+    oc_res = []
     for tau in taus:
         _df = df.copy()
         _df['y_hat'] = 1*(_df['p']>=tau)
+
+
 
         #population performance (confusion matrix (cm))
         _ = _df.groupby('eID').max()
@@ -31,6 +39,9 @@ def compute_alerts_and_performance(df, taus=np.linspace(0,1,25)):
               'oa_sum': alert_counts.sum(), 
              }
 
+        _oc_res = [{'observer': o, 'tau': tau, 'n_alerts': oc.get(o, 0)} for o in observers]
+        oc_res+=_oc_res
+
         #save tau res
         _res = {'tau': tau}
         _res.update(cm)
@@ -44,11 +55,16 @@ def compute_alerts_and_performance(df, taus=np.linspace(0,1,25)):
     ap_res['spec'] = ap_res['tn'] / (ap_res['tn'] + ap_res['fp'])
     ap_res['ppv'] = ap_res['tp'] / (ap_res['tp'] + ap_res['fp'])
     ap_res['npv'] = ap_res['tn'] / (ap_res['tn'] + ap_res['fn'])
-    
+
     ne = _df['eID'].nunique()
     ap_res['proportion_unalerted'] = (ne-ap_res['oa_sum'])/ne
+
+    oc_res = pd.DataFrame(oc_res)
     
-    return(ap_res)
+    if return_oc_res:
+        return(ap_res, oc_res)
+    else:
+        return(ap_res)
 
 
 def plot_alerts_and_performance(ap_res, performance_measures=['sens', 'spec']):
@@ -79,9 +95,7 @@ def plot_trade_off(ap_res,
     v1 = np.expand_dims(ap_res[c1].values, axis=0)
     v2 = np.expand_dims(ap_res[c2].values, axis=0)
     v = alpha*v1 + (1-alpha)*v2
-
-
-    plt.rcParams["figure.figsize"] = (15,15)
+    
     taus = list(ap_res['tau'])
     extent = [taus[0], taus[-1], alpha[-1,0], alpha[0,0]]
 
