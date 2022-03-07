@@ -6,7 +6,32 @@ from sklearn import metrics
 
 plt.rcParams["figure.figsize"] = (15,15)
 
-def compute_alerts_and_performance(df, taus=np.linspace(0,1,25), return_oc_res=False):
+def compute_alerts_and_performance(df, taus=np.linspace(0,1,25), return_oc_res=False, tau_on_percentile=False):
+    """
+    From a dataframe of model risk estimates returns the observer level alerts and performance of various decision thresholds (taus).
+    
+    ***
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Given dataframe of risk estimates must have the following columns: ***
+       
+    taus: np.array, optional
+        The decision thresholds being considered
+    
+    return_oc_res: Boolean, optional
+        If the observed alert counts should be returns
+        
+    tau_on_percentile: Boolean, optional
+        If the taus are evaluated on the percentiles of the risk estimates
+
+    Returns
+    -------
+    ap_res : returns summaries of the observer level number of alerts and performance for each tau
+    
+    oc_res : returns the actual number of alerts obvserved by each observer for a given tau
+    """
     #calculate sensitivity at the population level
     #calculate alerts at the observer level
 
@@ -16,6 +41,8 @@ def compute_alerts_and_performance(df, taus=np.linspace(0,1,25), return_oc_res=F
     oc_res = []
     for tau in taus:
         _df = df.copy()
+        if tau_on_percentile:
+            _df['p'] = _df['p'].rank(pct=True)
         _df['y_hat'] = 1*(_df['p']>=tau)
 
 
@@ -105,5 +132,36 @@ def plot_trade_off(ap_res,
     plt.ylabel('alpha\nupweight {} {} upweight {}'.format(c2, ' '*40, c1))
     plt.title('alpha*{} + (1-alpha)*{}\nin w.r.t alpha & tau'.format(c1, c2))
     plt.show()
+    
+    #new
+    _X,_Y = np.meshgrid(taus,  alpha)
 
+    fig, ax = plt.subplots()
+    CS = ax.contour(_X, _Y, v)
+    ax.clabel(CS, CS.levels, inline=True, fontsize=10)
+    fig.colorbar(CS)
+    ax.set_xlabel('tau')
+    ax.set_ylabel('alpha*{} + (1-alpha)*{}\nin w.r.t alpha & tau'.format(c1, c2))
+    plt.show()
 
+    
+def plot_gain(ap_res,
+              alpha=np.expand_dims(np.linspace(0.1,0.3, 5), axis=1), 
+              kappa = 10000,
+              beta = 20):
+    
+    #alpha: effectiveness
+    #kappa: cost of CDI
+    #beta: intervention cost
+    
+    n_intervene = np.expand_dims((ap_res['tp']+ap_res['fp']).values, axis=0)
+    n_intervene_pos = np.expand_dims((ap_res['tp']).values, axis=0)
+    v = alpha*kappa*n_intervene_pos - beta*(n_intervene)
+
+    for i,_a in enumerate(alpha):
+        plt.plot(list(ap_res['tau']), v[i], label='alpha={}'.format(_a[0]))
+
+    plt.ylabel('Gain')
+    plt.xlabel('tau')
+    plt.legend()
+    plt.show()
