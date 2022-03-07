@@ -156,12 +156,12 @@ def plot_gain(ap_res,
     
     n_intervene = np.expand_dims((ap_res['tp']+ap_res['fp']).values, axis=0)
     n_intervene_pos = np.expand_dims((ap_res['tp']).values, axis=0)
-    v = alpha*kappa*n_intervene_pos - beta*(n_intervene)
+    v = alpha*kappa*n_intervene_pos - beta*n_intervene
 
     for i,_a in enumerate(alpha):
         plt.plot(list(ap_res['tau']), v[i], label='alpha={}'.format(_a[0]))
 
-    plt.ylabel('Gain')
     plt.xlabel('tau')
+    plt.ylabel('Gain')
     plt.legend()
     plt.show()
