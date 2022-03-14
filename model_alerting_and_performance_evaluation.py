@@ -115,6 +115,9 @@ def plot_alerts_and_performance(ap_res, performance_measures=['sens', 'spec']):
     plt.show()
     
     
+    
+    
+    
 def plot_trade_off(ap_res,
                    alpha=np.expand_dims(np.linspace(1,0, 25), axis=1),
                    cmap = plt.cm.get_cmap('viridis'),
@@ -165,3 +168,31 @@ def plot_gain(ap_res,
     plt.ylabel('Gain')
     plt.legend()
     plt.show()
+    
+    
+def plot_effectiveness(ap_res, e = np.expand_dims(np.linspace(0,1, 5), axis=1)):
+    #e: effectiveness
+    
+    n_intervene = np.expand_dims((ap_res['tp']+ap_res['fp']).values, axis=0)
+    n_intervene_pos = np.expand_dims((ap_res['tp']).values, axis=0)
+    n_pos = np.expand_dims((ap_res['tp'] + ap_res['fn']).values, axis=0)
+    
+    v = n_pos - (e*n_intervene_pos)
+    
+    for i,_e in enumerate(e):
+        plt.plot(n_intervene[0], v[i], label='effectiveness={}'.format(_e[0]))
+
+    plt.ylabel('n CDI+')
+    plt.xlabel('n intervene')
+    plt.legend()
+    plt.show()
+    
+    for i,_e in enumerate(e):
+        plt.plot(list(ap_res['tau']), v[i], label='effectiveness={}'.format(_e[0]))
+
+    plt.ylabel('n CDI+')
+    plt.xlabel('n intervene')
+    plt.legend()
+    plt.show()
+    
+    return v
