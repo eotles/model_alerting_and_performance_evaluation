@@ -1,3 +1,4 @@
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -196,3 +197,117 @@ def plot_effectiveness(ap_res, e = np.expand_dims(np.linspace(0,1, 5), axis=1)):
     plt.show()
     
     return v
+
+
+
+######### Bootstrapped Versions ###########
+def bs_sample(df):
+
+    rng = np.random.default_rng()
+    IDs = df['eID'].unique()
+    _IDs = rng.choice(IDs, size=len(IDs), replace=True)
+    _df = []
+    for i, _ID in enumerate(_IDs):
+        _df_ID = df[df['eID']==_ID].copy(deep=True)
+        _df_ID['eID'] =  str(i) + '_' + _df_ID['eID'].astype(str)
+        _df.append(_df_ID)
+    _df = pd.concat(_df)
+    
+    return(_df)
+
+
+
+def _bs_rep_compute_alerts_and_performance(df, tau_on_percentile=True):
+    bs_df = bs_sample(df)
+    bs_ap_res, bs_oc_res = compute_alerts_and_performance(bs_df, return_oc_res=True, tau_on_percentile=tau_on_percentile)
+    return(bs_ap_res, bs_oc_res)
+    
+    
+
+def bs_compute_alerts_and_performance(df, tau_on_percentile=True, bs_rep=10, n_jobs=5):
+    ap_res, oc_res = compute_alerts_and_performance(df, return_oc_res=True, tau_on_percentile=tau_on_percentile)
+    
+    bs_res = Parallel(n_jobs=n_jobs)(delayed(_bs_rep_compute_alerts_and_performance)(df) for _ in range(bs_rep))
+    
+    bs_ap_res = []
+    bs_oc_res = []
+    for i, _bs_res in enumerate(bs_res):
+        _bs_res[0]['rep'] = i
+        bs_ap_res.append(_bs_res[0])
+        _bs_res[1]['rep'] = i
+        bs_oc_res.append(_bs_res[1])
+
+    bs_ap_res = pd.concat(bs_ap_res)
+    bs_oc_res = pd.concat(bs_oc_res)
+    
+    return(ap_res, oc_res, bs_ap_res, bs_oc_res)
+
+
+
+def bs_plot_effectiveness(ap_res, bs_ap_res, 
+                          e = np.expand_dims(np.linspace(0,1, 5), axis=1)):
+    #e: effectiveness
+    n_intervene = np.expand_dims((ap_res['tp']+ap_res['fp']).values, axis=0)
+    n_intervene_pos = np.expand_dims((ap_res['tp']).values, axis=0)
+    n_pos = np.expand_dims((ap_res['tp'] + ap_res['fn']).values, axis=0)
+
+    v = n_pos - (e*n_intervene_pos)
+
+
+    _bs_ap_res = bs_ap_res.copy(deep=True)
+    _bs_ap_res['n_intervene'] = _bs_ap_res['tp']+bs_ap_res['fp']
+    _bs_ap_res['n_intervene_pos'] = _bs_ap_res['tp']
+    _bs_ap_res['n_pos'] = _bs_ap_res['tp'] + _bs_ap_res['fn']
+
+
+    for i,_e in enumerate(e):
+        #plt.plot(n_intervene[0], v[i], label='effectiveness={}'.format(_e[0]))
+
+        x = n_intervene[0]
+        y = v[i]
+
+        _bs_ap_res['v'] = _bs_ap_res['n_pos'] - _e*_bs_ap_res['n_intervene_pos']
+        _ = _bs_ap_res.groupby(by=['tau'])[['n_intervene', 'v']].describe(percentiles=[0.025, 0.25, 0.5, 0.75, 0.975])
+        x_lb = _[('n_intervene', '2.5%')]
+        x_ub = _[('n_intervene', '97.5%')]
+        xerr = [x-x_lb, x_ub-x]
+
+        y_lb = _[('v', '2.5%')]
+        y_ub = _[('v', '97.5%')]
+        yerr = [y-y_lb, y_ub-y]
+
+        plt.errorbar(x, y, xerr=xerr, yerr=yerr, 
+                     label='effectiveness={}'.format(_e[0]))
+
+    plt.ylabel('n CDI+')
+    plt.xlabel('n intervene')
+    plt.legend()
+    plt.show()
+
+    for i,_e in enumerate(e):
+        #plt.plot(list(ap_res['tau']), v[i], label='effectiveness={}'.format(_e[0]))
+        
+        x = list(ap_res['tau'])
+        y = v[i]
+
+        _bs_ap_res['v'] = _bs_ap_res['n_pos'] - _e*_bs_ap_res['n_intervene_pos']
+        _ = _bs_ap_res.groupby(by=['tau'])[['n_intervene', 'v']].describe(percentiles=[0.025, 0.25, 0.5, 0.75, 0.975])
+
+        y_lb = _[('v', '2.5%')]
+        y_ub = _[('v', '97.5%')]
+        yerr = [y-y_lb, y_ub-y]
+
+        plt.errorbar(x, y, yerr=yerr, 
+                     label='effectiveness={}'.format(_e[0]))
+        
+
+    plt.ylabel('n CDI+')
+    plt.xlabel('n intervene')
+    plt.legend()
+    plt.show()
+
+
+
+
+
+
